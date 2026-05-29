@@ -44,6 +44,10 @@ client.on('messageCreate', async (message: Message) => {
         // 変更点2: forループを使って、PDFを1つずつ順番に処理する
         for (let i = 0; i < pdfAttachments.length; i++) {
             const pdfAttachment = pdfAttachments[i];
+                        
+            // ▼▼ この1行を追加（TypeScriptを安心させる） ▼▼
+            if (!pdfAttachment) continue;
+            
             const currentIndex = i + 1;
 
             try {
