@@ -72,13 +72,18 @@ client.on('messageCreate', async (message: Message) => {
                                 official_title: {
                                     type: SchemaType.STRING as SchemaType.STRING,
                                     description: "論文の正式な英語タイトル（重複チェックに使用します）"
+                                },                                
+                                publishDate: {
+                                    type: SchemaType.STRING as SchemaType.STRING,
+                                    description: "論文の公開日付（YYYY-MM-DD形式）"
                                 },
                                 summary: {
                                     type: SchemaType.STRING as SchemaType.STRING,
                                     description: "論文の概要。日本語で分かりやすく400文字程度で要約してください。"
                                 }
+
                             },
-                            required: ["thread_title", "official_title", "summary"]
+                            required: ["thread_title", "official_title", "summary", "publishDate"]
                         },
                     }
                 });
@@ -139,7 +144,7 @@ client.on('messageCreate', async (message: Message) => {
                     }
                 }
 
-                const contentText = `**【論文正式名】**\n${paperData.official_title}\n\n**【概要】**\n${paperData.summary}\n\n**【URL】**\n（必要に応じて手動追加）`;
+                const contentText = `**【論文正式名】**\n${paperData.official_title}\n\n**【公開日付】**\n${paperData.publishDate}\n\n**【概要】**\n${paperData.summary}\n\n**【URL】**\n（必要に応じて手動追加）`;
 
                 await forumChannel.threads.create({
                     name: paperData.thread_title,
