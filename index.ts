@@ -30,9 +30,74 @@ client.once('clientReady', () => {
     console.log(`ログイン完了: ${client.user?.tag} がオンラインになりました！`);
 });
 
-client.on('messageCreate', async (message: Message) => {
-    if (message.author.bot) return;
+client.on('messageCreate', async (message: Message) => {//Discordの発言したら起動
+    
+    if (message.author.bot) return;//Botの発言だったスキップ
 
+    if (message.content.startsWith('\\bot ')) {
+        // '\bot ' の後の文字列をキーワードとして抽出（小文字に変換して検索しやすくする）
+        const keyword = message.content.slice(5).trim().toLowerCase();
+        
+        if (!keyword) {
+            await message.reply("検索キーワードを指定してください。（例: `\\bot ロボット`）");
+            return;
+        }
+
+        const statusMsg = await message.reply(`🔍 フォーラム内から「**${keyword}**」を検索しています...`);
+
+        try {
+            const forumChannel = await client.channels.fetch(FORUM_CHANNEL_ID);
+            if (!forumChannel || !forumChannel.isThreadOnly()) {
+                await statusMsg.edit("⚠️ エラー: フォーラムチャンネルが見つかりません。");
+                return;
+            }
+
+            // フォーラム内のスレッドを取得（アーカイブされていないアクティブなもの）
+            const { threads } = await forumChannel.threads.fetchActive();
+            let results: string[] = [];
+
+            for (const [_, thread] of threads) {
+                // 1. スレッドのタイトルにキーワードが含まれているかチェック
+                if (thread.name.toLowerCase().includes(keyword)) {
+                    results.push(`・[${thread.name}](<https://discord.com/channels/${message.guildId}/${thread.id}>)`);
+                    continue; // タイトルで見つかったら次のスレッドへ
+                }
+                
+                // 2. タイトルになければ、スレッドの最初のメッセージ（要約テキスト）をチェック
+                try {
+                    const firstMsg = await thread.fetchStarterMessage();
+                    if (firstMsg && firstMsg.content.toLowerCase().includes(keyword)) {
+                        results.push(`・[${thread.name}](<https://discord.com/channels/${message.guildId}/${thread.id}>)`);
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+
+            // 検索結果の表示
+            if (results.length > 0) {
+                // Discordの文字数制限に配慮し、最大10件まで表示
+                const topResults = results.slice(0, 10);
+                let replyText = `✅ 「**${keyword}**」の関連論文（${results.length}件）:\n${topResults.join('\n')}`;
+                
+                if (results.length > 10) {
+                    replyText += `\n*...他 ${results.length - 10} 件*`;
+                }
+                await statusMsg.edit(replyText);
+            } else {
+                await statusMsg.edit(`❌ 「**${keyword}**」に一致する論文は見つかりませんでした。`);
+            }
+
+        } catch (error) {
+            console.error("検索エラー:", error);
+            await statusMsg.edit("❌ 検索中にエラーが発生しました。");
+        }
+        
+        // 検索コマンドを実行した場合は、ここで処理を終了する（下のPDF処理には進まない）
+        return; 
+    }
+
+    
     // 変更点1: findではなくfilterを使って、メッセージ内の「すべてのPDF」を配列として取得する
     const pdfAttachments = Array.from(message.attachments.values()).filter(a => a.name.endsWith('.pdf'));
     
