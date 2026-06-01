@@ -154,10 +154,17 @@ client.on('messageCreate', async (message: Message) => {//Discordの発言した
                     messageQueue.push(currentText);
                 }
                 
-                // 分割したメッセージを順番にDiscordへ送信
-                await statusMsg.edit(messageQueue[0]); // 1つ目は「検索中...」のメッセージを上書き
+// 分割したメッセージを順番にDiscordへ送信
+                const firstMessage = messageQueue[0];
+                if (firstMessage) {
+                    await statusMsg.edit(firstMessage); // 1つ目は「検索中...」のメッセージを上書き
+                }
+                
                 for (let i = 1; i < messageQueue.length; i++) {
-                    await message.reply(messageQueue[i]); // 2つ目以降は返信として連続投稿
+                    const nextMessage = messageQueue[i];
+                    if (nextMessage) {
+                        await message.reply(nextMessage); // 2つ目以降は返信として連続投稿
+                    }
                 }
                 
             } else {
