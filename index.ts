@@ -35,11 +35,11 @@ client.on('messageCreate', async (message: Message) => {//Discordの発言した
     if (message.author.bot) return;//Botの発言だったスキップ
 
     //////////////////////////////////////////////////////////////////
-    if (message.content.startsWith('\\bot ')) {
+    if (message.content.startsWith('/bot ')) {
         const query = message.content.slice(5).trim();
         
         if (!query) {
-            await message.reply("検索したい内容や要望を教えてください。（例: `\\bot 遠隔操作をやりやすくする技術はない？`）");
+            await message.reply("検索したい内容や要望を教えてください。（例: `/bot 遠隔操作をやりやすくする技術はない？`）");
             return;
         }
 
