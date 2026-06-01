@@ -31,19 +31,18 @@ client.once('clientReady', () => {
 });
 
 client.on('messageCreate', async (message: Message) => {//Discordの発言したら起動
-    
+
     if (message.author.bot) return;//Botの発言だったスキップ
 
     if (message.content.startsWith('\\bot ')) {
-        // '\bot ' の後の文字列をキーワードとして抽出（小文字に変換して検索しやすくする）
-        const keyword = message.content.slice(5).trim().toLowerCase();
+        const query = message.content.slice(5).trim();
         
-        if (!keyword) {
-            await message.reply("検索キーワードを指定してください。（例: `\\bot ロボット`）");
+        if (!query) {
+            await message.reply("検索したい内容や要望を教えてください。（例: `\\bot 遠隔操作をやりやすくする技術はない？`）");
             return;
         }
 
-        const statusMsg = await message.reply(`🔍 フォーラム内から「**${keyword}**」を検索しています...`);
+        const statusMsg = await message.reply(`🧠 AIが「**${query}**」に役立ちそうな論文を思考・検索しています...`);
 
         try {
             const forumChannel = await client.channels.fetch(FORUM_CHANNEL_ID);
@@ -52,40 +51,75 @@ client.on('messageCreate', async (message: Message) => {//Discordの発言した
                 return;
             }
 
-            // フォーラム内のスレッドを取得（アーカイブされていないアクティブなもの）
+            // 1. フォーラム内のスレッド（論文）の「ID」と「タイトル」のリストを作る
             const { threads } = await forumChannel.threads.fetchActive();
-            let results: string[] = [];
+            const paperList = threads.map(t => ({ id: t.id, title: t.name }));
 
-            for (const [_, thread] of threads) {
-                // 1. スレッドのタイトルにキーワードが含まれているかチェック
-                if (thread.name.toLowerCase().includes(keyword)) {
-                    results.push(`・[${thread.name}](<https://discord.com/channels/${message.guildId}/${thread.id}>)`);
-                    continue; // タイトルで見つかったら次のスレッドへ
-                }
-                
-                // 2. タイトルになければ、スレッドの最初のメッセージ（要約テキスト）をチェック
-                try {
-                    const firstMsg = await thread.fetchStarterMessage();
-                    if (firstMsg && firstMsg.content.toLowerCase().includes(keyword)) {
-                        results.push(`・[${thread.name}](<https://discord.com/channels/${message.guildId}/${thread.id}>)`);
-                    }
-                } catch (e) {
-                    continue;
-                }
+            if (paperList.length === 0) {
+                await statusMsg.edit("フォーラムにまだ論文が登録されていません。");
+                return;
             }
 
-            // 検索結果の表示
-            if (results.length > 0) {
-                // Discordの文字数制限に配慮し、最大10件まで表示
-                const topResults = results.slice(0, 10);
-                let replyText = `✅ 「**${keyword}**」の関連論文（${results.length}件）:\n${topResults.join('\n')}`;
-                
-                if (results.length > 10) {
-                    replyText += `\n*...他 ${results.length - 10} 件*`;
+            // 2. Geminiにリストと要望を渡して、合致するものを考えさせる
+            const searchModel = genAI.getGenerativeModel({ 
+                model: 'gemini-2.5-flash',
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: SchemaType.OBJECT as SchemaType.OBJECT,
+                        properties: {
+                            matches: {
+                                type: SchemaType.ARRAY as SchemaType.ARRAY,
+                                items: {
+                                    type: SchemaType.OBJECT as SchemaType.OBJECT,
+                                    properties: {
+                                        id: { type: SchemaType.STRING as SchemaType.STRING },
+                                        reason: { 
+                                            type: SchemaType.STRING as SchemaType.STRING,
+                                            description: "なぜこの論文がユーザーの要望に役立つのか、推薦理由を日本語で1〜2文で説明してください。"
+                                        }
+                                    },
+                                    required: ["id", "reason"]
+                                }
+                            }
+                        },
+                        required: ["matches"]
+                    }
                 }
+            });
+
+            // AIへのプロンプト（指示書）
+            const prompt = `
+            ユーザーから以下の要望や質問がありました。
+            ユーザーの要望: 「${query}」
+
+            以下の論文リスト（タイトル）の中から、この要望の解決や関連知識として役立ちそうな論文を考えて、最大5件選んでください。
+            キーワードが完全に一致していなくても、意味や文脈が合致していれば推薦してください。
+            全く関連するものがない場合は空の配列を返してください。
+
+            データベースの論文リスト:
+            ${JSON.stringify(paperList)}
+            `;
+
+            // AIに考えさせる
+            const aiResult = await searchModel.generateContent(prompt);
+            const searchData = JSON.parse(aiResult.response.text());
+
+            // 3. AIの回答をもとに、Discordへ返信するテキストを作る
+            if (searchData.matches && searchData.matches.length > 0) {
+                let replyText = `✅ 「**${query}**」について、AIが以下の論文をピックアップしました！\n\n`;
+                
+                searchData.matches.forEach((match: { id: string; reason: string }) => {
+                    const thread = threads.get(match.id);
+                    if (thread) {
+                        replyText += `**[${thread.name}](<https://discord.com/channels/${message.guildId}/${thread.id}>)**\n`;
+                        replyText += `💡 **推薦理由:** ${match.reason}\n\n`;
+                    }
+                });
+                
                 await statusMsg.edit(replyText);
             } else {
-                await statusMsg.edit(`❌ 「**${keyword}**」に一致する論文は見つかりませんでした。`);
+                await statusMsg.edit(`❌ 「**${query}**」に役立ちそうな論文は、現在のデータベースには見つかりませんでした。`);
             }
 
         } catch (error) {
@@ -93,8 +127,7 @@ client.on('messageCreate', async (message: Message) => {//Discordの発言した
             await statusMsg.edit("❌ 検索中にエラーが発生しました。");
         }
         
-        // 検索コマンドを実行した場合は、ここで処理を終了する（下のPDF処理には進まない）
-        return; 
+        return; // 検索処理が終わったらここで終了
     }
 
     
