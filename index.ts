@@ -325,7 +325,7 @@
 //     res.end('Bot is running!');
 // }).listen(process.env.PORT || 3000);
 
-import { Client, GatewayIntentBits, Message, TextChannel, ApplicationCommandOptionType, Interaction } from 'discord.js';
+import { Client, GatewayIntentBits, type Message, type TextChannel, ApplicationCommandOptionType, type Interaction } from 'discord.js';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 
 import 'dotenv/config'; 
